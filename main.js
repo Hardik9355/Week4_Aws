@@ -1,6 +1,11 @@
 "use strict";
 require("dotenv").config();
 const env = require("dotenv");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+
+// const AWS3 =  require('@aws-sdk/client-s3');
+// const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const connectDB = require("./config/db");
 const employee = require("./models/employee");
 const AWS = require("aws-sdk");
@@ -8,23 +13,15 @@ const { eventNames } = require("./models/employee");
 
 env.config();
 const awsConfig = {
-  accessKeyId : "AKIATLGYA7EVDABHFMM5",
-  secretAccessKey : "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",
-  region: "ap-northeast-1"
+  accessKeyId : process.env.AccessKey,
+  secretAccessKey : process.env.SecretKey,
+  region: process.env.AWS_REGION
 }
 const SES  = new AWS.SES (awsConfig);
 connectDB();
 
 
-module.exports.hello = async (event) => {
-  return {
-    statusCode: 200,
-    body: JSON.stringify(
-      {
-        message: "Go Serverless v2.0! Your function executed successfully!",
-      }),
-  };
-};
+
 
 module.exports.getEmployees = async (event) => {
   const e = await employee.find();
@@ -37,19 +34,27 @@ module.exports.getEmployees = async (event) => {
 
 module.exports.postEmployee = async (event) => {
   // try{
-
-   
     const email = process.env.FROM_EMAIL;
+    let saltRounds =10;
   try{
-    const{id,name,department,EMAIL} =JSON.parse(event.body);
-    const createemployee =new employee({
-      id,
-      name,
-      department,
-      EMAIL,
+    const{id,name,department,EMAIL,password} =JSON.parse(event.body);
+    bcrypt.hash(password, saltRounds , async function(error,hash){
+      if(!error){
+        const createemployee =new employee({
+          id,
+          name,
+          department,
+          EMAIL,
+          password: hash
+    
+        });
+        await createemployee.save();
 
-    });
-    await createemployee.save();
+        
+      }
+    })
+    
+   
   const params ={
     Source: email,
     Destination :{
@@ -80,20 +85,64 @@ module.exports.postEmployee = async (event) => {
 } catch(error){
   error;
 }
-
-    return "Employee posted Successfully";
-  
-  // }
-  // catch(err){
-  //   res.json({
-  //     message:err.message,
-  //   });
-  // };
-    // 1. read employee object from event.body
-    // 2. conver that into JSON
-    // 3. Save in mongoDB
    
 };
+module.exports.loginEmployee = async (event) => {
+  const email = process.env.FROM_EMAIL;
+  try{
+    const{EMAIL,password} = JSON.parse(event.body);
+    let loginemployee = await  employee.findOne({EMAIL:EMAIL});
+    bcrypt.compare(password, loginemployee.password, function (error,result){
+      if(result==true){
+        var token = jwt.sign(
+          {EMAIL:loginemployee.EMAIL, id:loginemployee._id, name: loginemployee.name},
+          process.env.SECRETKEY
+        );
+
+        
+        console.log("Logged in Successfully");
+        
+      }
+      else{
+        console.log("Logged in unsuccessfully");
+      }
+    });
+    const params ={
+      Source: email,
+      Destination :{
+        ToAddresses : [EMAIL],
+      },
+      Message: {
+        Subject : {
+          Charset : "UTF-8",
+          Data : "Welcome to Inzint.",
+        },
+        Body :{
+          Html:{
+            Charset : "UTF-8",
+            Data: `<h1> Hii, Welcome to our Team With regards Hardik Garg</h1>`,
+          },
+        },
+      },
+    };
+    const emailSent = await SES.sendEmail(params).promise()
+    .then(data => {
+      data
+    })
+      .catch(error =>{
+        error.message
+  
+      
+    })
+
+
+  }
+  catch(error){
+    console.log("Invalid Details");
+  }
+};
+
+
 
 
 

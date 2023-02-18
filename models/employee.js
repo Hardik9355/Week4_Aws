@@ -18,6 +18,10 @@ const employeeSchema = new mongoose.Schema({
         required : true,
         
 
+    },
+    password:{
+        type : "String",
+        required : true
     }
 });
 const employee = mongoose.model("employee", employeeSchema)

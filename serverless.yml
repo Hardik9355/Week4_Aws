@@ -29,3 +29,9 @@ functions:
       - http:
           path: /employee
           method: post
+  loginEmployee:
+    handler: main.loginEmployee
+    events:
+      - http:
+          path: /login
+          method: post
